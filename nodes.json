@@ -1,0 +1,12 @@
+[
+  {
+    "id": "ABC-946",
+    "title": "Implement wait loop in PHP client",
+    "epic": "ABC-900",
+    "epicName": "Main Epic",
+    "status": "TODO",
+    "priority": "High",
+    "assignee": "Ondrej Popelka",
+    "onCriticalPath": true
+  }
+]

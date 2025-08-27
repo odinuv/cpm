@@ -1,0 +1,8 @@
+[
+  {
+    "source": "ABC-946",
+    "target": "ABC-909",
+    "type": "blocks",
+    "pathType": "critical"
+  }
+]

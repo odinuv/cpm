@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dependency Graph</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre-d3/0.6.4/dagre-d3.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .controls {
+            padding: 15px 20px;
+            background: #ecf0f1;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .control-group {
+            display: inline-block;
+            margin-right: 20px;
+        }
+
+        .control-group label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        .graph-container {
+            width: 100%;
+            height: 800px;
+            overflow: auto;
+            position: relative;
+        }
+
+        #graph {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Node styles */
+        .node rect {
+            fill: #fff;
+            stroke: #333;
+            stroke-width: 2px;
+            rx: 8px;
+            ry: 8px;
+        }
+
+        .critical-path {
+            stroke: #e74c3c;
+            stroke-width: 3px;
+            fill: #fdf2f2;
+            border: #e74c3c;
+            border-width: 5px;
+            border-style: solid;
+        }
+
+        .node.status-done rect {
+            fill: #d5f4e6;
+            stroke: #27ae60;
+        }
+
+        .node.status-in-progress rect {
+            fill: #fff3cd;
+            stroke: #f39c12;
+        }
+
+        .node.status-to-do rect {
+            fill: #e3f2fd;
+            stroke: #3498db;
+        }
+
+        .node.priority-high rect {
+            box-shadow: 0 0 0 2px #e74c3c;
+        }
+
+        .node.priority-medium rect {
+            box-shadow: 0 0 0 2px #f39c12;
+        }
+
+        .node text {
+            fill: #333;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .node .node-title {
+            font-size: 11px;
+            font-weight: normal;
+        }
+
+        .node .node-assignee {
+            font-size: 10px;
+            fill: #666;
+        }
+
+        .node .node-epic {
+            font-size: 9px;
+            fill: #888;
+        }
+
+        /* Edge styles */
+        .edgePath path {
+            stroke: #333;
+            stroke-width: 2px;
+            fill: none;
+        }
+
+        .edgePath.critical path {
+            stroke: #e74c3c;
+            stroke-width: 3px;
+        }
+
+        .edgePath .arrowheadPath {
+            fill: #333;
+        }
+
+        .edgePath.critical .arrowheadPath {
+            fill: #e74c3c;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 300px;
+        }
+
+        .legend {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.95);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            font-size: 11px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px;
+            text-align: center;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Dependency Graph Visualization</h1>
+        </div>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Layout:</label>
+                <button onclick="updateLayout('TB')">Top-Bottom</button>
+                <button onclick="updateLayout('LR')">Left-Right</button>
+            </div>
+            <div class="control-group">
+                <label>Filter:</label>
+                <button onclick="filterCriticalPath()">Critical Path Only</button>
+                <button onclick="showAll()">Show All</button>
+            </div>
+            <div class="control-group">
+                <button onclick="fitToScreen()">Fit to Screen</button>
+                <button onclick="resetZoom()">Reset Zoom</button>
+            </div>
+        </div>
+
+        <div class="graph-container">
+            <div id="loading" class="loading">Loading graph data...</div>
+            <svg id="graph" style="display: none;"></svg>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #fdf2f2; border: 2px solid #e74c3c;"></div>
+                    <span>Critical Path</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #d5f4e6; border: 1px solid #27ae60;"></div>
+                    <span>Done</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #fff3cd; border: 1px solid #f39c12;"></div>
+                    <span>In Progress</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #e3f2fd; border: 1px solid #3498db;"></div>
+                    <span>To Do</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip" style="display: none;"></div>
+
+    <script>
+        let nodes = [];
+        let edges = [];
+        let g = new dagreD3.graphlib.Graph().setGraph({});
+        let svg = d3.select("#graph");
+        let svgGroup = svg.append("g");
+        let render = new dagreD3.render();
+        let currentLayout = 'TB';
+        let showOnlyCritical = false;
+
+        // Load data and initialize graph
+        async function loadData() {
+            try {
+                const [nodesResponse, edgesResponse] = await Promise.all([
+                    fetch('./nodes.json'),
+                    fetch('./dependencies.json')
+                ]);
+
+                if (!nodesResponse.ok || !edgesResponse.ok) {
+                    throw new Error('Failed to load data files');
+                }
+
+                nodes = await nodesResponse.json();
+                edges = await edgesResponse.json();
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('graph').style.display = 'block';
+                
+                renderGraph();
+                fitToScreen();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').innerHTML = 
+                    `<div class="error-message">
+                        Error loading data files. Please ensure nodes.json and dependencies.json are in the same directory.
+                        <br><small>${error.message}</small>
+                    </div>`;
+            }
+        }
+
+        function renderGraph() {
+            // Clear previous graph
+            g = new dagreD3.graphlib.Graph().setGraph({
+                rankdir: currentLayout,
+                nodesep: 50,
+                ranksep: 70,
+                marginx: 20,
+                marginy: 20
+            });
+
+            // Filter nodes and edges if needed
+            let filteredNodes = nodes;
+            let filteredEdges = edges;
+
+            if (showOnlyCritical) {
+                const criticalNodeIds = new Set();
+                
+                // Find all nodes on critical path
+                edges.forEach(edge => {
+                    if (edge.pathType === 'critical') {
+                        criticalNodeIds.add(edge.source);
+                        criticalNodeIds.add(edge.target);
+                    }
+                });
+
+                // Also include nodes marked as onCriticalPath
+                nodes.forEach(node => {
+                    if (node.onCriticalPath) {
+                        criticalNodeIds.add(node.id);
+                    }
+                });
+
+                filteredNodes = nodes.filter(node => criticalNodeIds.has(node.id));
+                filteredEdges = edges.filter(edge => 
+                    criticalNodeIds.has(edge.source) && criticalNodeIds.has(edge.target)
+                );
+            }
+
+            // Add nodes to graph
+            filteredNodes.forEach(node => {
+                const nodeHtml = createNodeHtml(node);
+                g.setNode(node.id, {
+                    labelType: "html",
+                    label: nodeHtml,
+                    rx: 8,
+                    ry: 8,
+                    padding: 0
+                });
+            });
+
+            // Add edges to graph
+            filteredEdges.forEach(edge => {
+                g.setEdge(edge.source, edge.target, {
+                    label: "",
+                    curve: d3.curveBasis
+                });
+            });
+
+            // Clear SVG and render
+            svgGroup.selectAll("*").remove();
+            render(svgGroup, g);
+
+            // Apply custom styles and interactions
+            applyCustomStyles();
+            addInteractions();
+        }
+
+        function createNodeHtml(node) {
+            const statusClass = node.status ? `status-${node.status.toLowerCase().replace(/\s+/g, '-')}` : '';
+            const priorityClass = node.priority ? `priority-${node.priority.toLowerCase()}` : '';
+            const criticalClass = node.onCriticalPath ? 'critical-path' : '';
+            
+            return `
+                <div class="node-content ${criticalClass}" style="padding: 8px; min-width: 200px;">
+                    <div style="font-weight: bold; color: #2c3e50; margin-bottom: 4px;">${node.id}</div>
+                    <div style="font-size: 11px; color: #34495e; margin-bottom: 4px; line-height: 1.3;">${node.title}</div>
+                    <div style="font-size: 9px; color: #7f8c8d; margin-bottom: 2px;">${node.epicName || ''}</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px;">
+                        <span style="font-size: 9px; background: ${getStatusColor(node.status)}; color: white; padding: 2px 6px; border-radius: 12px;">${node.status || 'Unknown'}</span>
+                        <span style="font-size: 9px; color: #666;">${node.assignee || 'Unassigned'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getStatusColor(status) {
+            const colors = {
+                'Done': '#27ae60',
+                'In Progress': '#f39c12',
+                'To Do': '#3498db',
+                'Blocked': '#e74c3c'
+            };
+            return colors[status] || '#95a5a6';
+        }
+
+        function applyCustomStyles() {
+            // Style nodes based on their properties
+            nodes.forEach(node => {
+                const nodeSelection = svgGroup.select(`#${CSS.escape(node.id)}`);
+                
+                if (node.onCriticalPath) {
+                    nodeSelection.classed('critical-path', true);
+                }
+                
+                if (node.status) {
+                    nodeSelection.classed(`status-${node.status.toLowerCase().replace(/\s+/g, '-')}`, true);
+                }
+                
+                if (node.priority) {
+                    nodeSelection.classed(`priority-${node.priority.toLowerCase()}`, true);
+                }
+            });
+
+            // Style edges based on path type
+            edges.forEach(edge => {
+                const edgeSelection = svgGroup.select(`[data-source="${edge.source}"][data-target="${edge.target}"]`);
+                if (edge.pathType === 'critical') {
+                    edgeSelection.classed('critical', true);
+                }
+            });
+        }
+
+        function addInteractions() {
+            // Add tooltip on hover
+            const tooltip = d3.select("#tooltip");
+
+            svgGroup.selectAll('.node').on('mouseover', function(event, d) {
+                const node = nodes.find(n => n.id === d);
+                if (node) {
+                    tooltip.style('display', 'block')
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 10) + 'px')
+                        .html(`
+                            <strong>${node.id}</strong><br/>
+                            <strong>Title:</strong> ${node.title}<br/>
+                            <strong>Epic:</strong> ${node.epicName || 'None'}<br/>
+                            <strong>Status:</strong> ${node.status || 'Unknown'}<br/>
+                            <strong>Priority:</strong> ${node.priority || 'None'}<br/>
+                            <strong>Assignee:</strong> ${node.assignee || 'Unassigned'}<br/>
+                            <strong>Critical Path:</strong> ${node.onCriticalPath ? 'Yes' : 'No'}
+                        `);
+                }
+            }).on('mouseout', function() {
+                tooltip.style('display', 'none');
+            });
+
+            // Add zoom and pan
+            const zoom = d3.zoom().on("zoom", function(event) {
+                svgGroup.attr("transform", event.transform);
+            });
+            svg.call(zoom);
+        }
+
+        // Control functions
+        function updateLayout(direction) {
+            currentLayout = direction;
+            renderGraph();
+        }
+
+        function filterCriticalPath() {
+            showOnlyCritical = true;
+            renderGraph();
+            fitToScreen();
+        }
+
+        function showAll() {
+            showOnlyCritical = false;
+            renderGraph();
+            fitToScreen();
+        }
+
+        function fitToScreen() {
+            const bounds = svgGroup.node().getBBox();
+            const parent = svg.node().parentElement;
+            const fullWidth = parent.clientWidth;
+            const fullHeight = parent.clientHeight;
+            const width = bounds.width;
+            const height = bounds.height;
+            const midX = bounds.x + width / 2;
+            const midY = bounds.y + height / 2;
+            
+            const scale = Math.min(fullWidth / width, fullHeight / height) * 0.9;
+            const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
+
+            svg.transition().duration(750).call(
+                d3.zoom().transform,
+                d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+            );
+        }
+
+        function resetZoom() {
+            svg.transition().duration(750).call(
+                d3.zoom().transform,
+                d3.zoomIdentity
+            );
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>
