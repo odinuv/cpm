@@ -1,6 +1,6 @@
 # CPM (Critical Path Method) Experiment
 
-**This repository is fully generated.**
+**This repository is fully generated code for article [Critical Path Analysis in Jira for Everyone](https://ondrej-popelka.medium.com/critical-path-analysis-in-jira-for-everyone-fb6ab095aa17?source=rss-a4e07f97e943------2).**
 
 This repository contains a Python-based implementation for calculating and visualizing the critical path in project dependencies using the Critical Path Method (CPM).
 
